@@ -16,6 +16,8 @@ namespace BFSVisualizer
         }
 
         TreeNode? root;
+        TreeNode? bfsRoot;
+        TreeNode? dfsRoot;
         List<TreeNode> traversalOrder = new List<TreeNode>();
         int traversalIndex = 0;
         Queue<TreeNode> currentQueue = new Queue<TreeNode>();
@@ -23,8 +25,10 @@ namespace BFSVisualizer
         HashSet<TreeNode> visitedNodes = new HashSet<TreeNode>();
         bool isSimulating = false;
         bool isDFS = false;
-        Button btnStart = null!, btnNext = null!, btnReset = null!;
+        Button btnStart = null!, btnNext = null!, btnReset = null!, btnCreateGraph = null!;
         ComboBox cmbAlgorithm = null!;
+        TextBox txtGraphInput = null!;
+        Label lblGraphInput = null!;
 
         public Form1()
         {
@@ -34,6 +38,8 @@ namespace BFSVisualizer
             this.DoubleBuffered = true;
             this.KeyPreview = true; // Allow form to receive key events
             this.KeyDown += Form1_KeyDown; // Connect the event handler
+            this.WindowState = FormWindowState.Maximized; // Start maximized
+            this.Resize += Form1_Resize; // Handle resize events
 
             CreateControls();
             BuildTree();
@@ -92,12 +98,24 @@ namespace BFSVisualizer
 
         private void BuildTree()
         {
+            // Build BFS Tree (original tree)
+            BuildBFSTree();
+            
+            // Build DFS Tree (new tree structure)
+            BuildDFSTree();
+            
+            // Set initial root
+            root = bfsRoot;
+        }
+
+        private void BuildBFSTree()
+        {
             // Tạo node
             TreeNode[] nodes = new TreeNode[15];
             for (int i = 1; i <= 14; i++)
                 nodes[i] = new TreeNode(i);
 
-            // Xây cây (theo hình bạn gửi)
+            // Xây cây BFS (theo hình cũ)
             nodes[1].Children.AddRange(new[] { nodes[2], nodes[3], nodes[4] });
             nodes[2].Children.AddRange(new[] { nodes[5], nodes[6] });
             nodes[3].Children.Add(nodes[7]);
@@ -107,23 +125,35 @@ namespace BFSVisualizer
             nodes[8].Children.Add(nodes[12]);
             nodes[9].Children.AddRange(new[] { nodes[13], nodes[14] });
 
-            // Đặt vị trí cho các node (tùy chỉnh) - moved 30 pixels to the right
-            nodes[1].Position = new Point(480, 50);
-            nodes[2].Position = new Point(280, 150);
-            nodes[3].Position = new Point(480, 150);
-            nodes[4].Position = new Point(680, 150);
-            nodes[5].Position = new Point(230, 250);
-            nodes[6].Position = new Point(330, 250);
-            nodes[7].Position = new Point(480, 250);
-            nodes[8].Position = new Point(630, 250);
-            nodes[9].Position = new Point(730, 250);
-            nodes[10].Position = new Point(210, 350);
-            nodes[11].Position = new Point(350, 350);
-            nodes[12].Position = new Point(630, 350);
-            nodes[13].Position = new Point(710, 350);
-            nodes[14].Position = new Point(750, 350);
+            bfsRoot = nodes[1];
+            
+            // Set initial positions (will be updated by UpdateNodePositions)
+            UpdateBFSNodePositions();
+        }
 
-            root = nodes[1];
+        private void BuildDFSTree()
+        {
+            // Tạo node cho DFS tree
+            TreeNode[] nodes = new TreeNode[10];
+            for (int i = 1; i <= 9; i++)
+                nodes[i] = new TreeNode(i);
+
+            // Xây cây DFS theo yêu cầu:
+            // (1, 2), (1, 6), (1, 8)
+            // (2, 3), (2, 4)
+            // (3, 5)
+            // (6, 7)
+            // (8, 9)
+            nodes[1].Children.AddRange(new[] { nodes[2], nodes[6], nodes[8] });
+            nodes[2].Children.AddRange(new[] { nodes[3], nodes[4] });
+            nodes[3].Children.Add(nodes[5]);
+            nodes[6].Children.Add(nodes[7]);
+            nodes[8].Children.Add(nodes[9]);
+
+            dfsRoot = nodes[1];
+            
+            // Set initial positions (will be updated by UpdateNodePositions)
+            UpdateDFSNodePositions();
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -179,11 +209,6 @@ namespace BFSVisualizer
                     borderPen = Pens.Black;
                 }
             }
-            else if ((isDFS && currentStack.Contains(node)) || (!isDFS && currentQueue.Contains(node)))
-            {
-                brush = Brushes.LightBlue; // In queue/stack
-                borderPen = new Pen(Color.Blue, 2);
-            }
             else
             {
                 brush = Brushes.White; // Not visited
@@ -210,14 +235,17 @@ namespace BFSVisualizer
 
         private void DrawQueueVisualization(Graphics g, Font font, Font boldFont)
         {
+            int baseX = 20;
+            int baseY = this.ClientSize.Height - 500; 
+            
             if (isDFS)
             {
                 // Stack visualization for DFS
-                g.DrawString("Current Stack:", boldFont, Brushes.Black, 20, 400);
+                g.DrawString("Current Stack:", boldFont, Brushes.Black, baseX, baseY - 200);
                 
                 // Draw stack elements (from bottom to top)
-                int x = 20;
-                int y = 580; // Bottom position of stack
+                int x = baseX;
+                int y = baseY + 30; // Bottom position of stack
                 var stackArray = currentStack.ToArray();
                 
                 for (int i = stackArray.Length - 1; i >= 0; i--)
@@ -248,16 +276,16 @@ namespace BFSVisualizer
                 string status = isSimulating ? 
                     $"Stack Size: {currentStack.Count}" : 
                     "Click 'Start DFS' to begin simulation";
-                g.DrawString(status, font, Brushes.Black, 20, 620);
+                g.DrawString(status, font, Brushes.Black, baseX, baseY + 70);
             }
             else
             {
                 // Queue visualization for BFS
-                g.DrawString("Current Queue:", boldFont, Brushes.Black, 20, 550);
+                g.DrawString("Current Queue:", boldFont, Brushes.Black, baseX, baseY);
                 
                 // Draw queue elements
-                int x = 20;
-                int y = 580;
+                int x = baseX;
+                int y = baseY + 30;
                 int index = 0;
                 
                 foreach (var node in currentQueue)
@@ -287,45 +315,31 @@ namespace BFSVisualizer
                 string status = isSimulating ? 
                     $"Queue Size: {currentQueue.Count}" : 
                     "Click 'Start BFS' to begin simulation";
-                g.DrawString(status, font, Brushes.Black, 20, 640);
+                g.DrawString(status, font, Brushes.Black, baseX, baseY + 90);
             }
         }
 
         private void DrawLegend(Graphics g, Font font)
         {
-            int x = 800;
-            int y = 550;
+            int x = this.ClientSize.Width - 250; // Position from right edge
+            int y = this.ClientSize.Height - 120; // Position from bottom (adjusted for fewer items)
             
-            g.DrawString("Legend:", new Font("Arial", 12, FontStyle.Bold), Brushes.Black, x, y);
+            g.DrawString("Type:", new Font("Arial", 12, FontStyle.Bold), Brushes.Black, x, y);
             
             // White - Not visited
             g.FillEllipse(Brushes.White, x, y + 25, 20, 20);
             g.DrawEllipse(Pens.Black, x, y + 25, 20, 20);
             g.DrawString("Not Visited", font, Brushes.Black, x + 30, y + 28);
             
-            // Light Blue/Light Coral - In Queue/Stack
-            if (isDFS)
-            {
-                g.FillEllipse(Brushes.LightCoral, x, y + 50, 20, 20);
-                g.DrawEllipse(new Pen(Color.Red, 2), x, y + 50, 20, 20);
-                g.DrawString("In Stack", font, Brushes.Black, x + 30, y + 53);
-            }
-            else
-            {
-                g.FillEllipse(Brushes.LightBlue, x, y + 50, 20, 20);
-                g.DrawEllipse(new Pen(Color.Blue, 2), x, y + 50, 20, 20);
-                g.DrawString("In Queue", font, Brushes.Black, x + 30, y + 53);
-            }
-            
             // Yellow - Currently Processing
-            g.FillEllipse(Brushes.Yellow, x, y + 75, 20, 20);
-            g.DrawEllipse(new Pen(Color.Orange, 3), x, y + 75, 20, 20);
-            g.DrawString("Processing", font, Brushes.Black, x + 30, y + 78);
+            g.FillEllipse(Brushes.Yellow, x, y + 50, 20, 20);
+            g.DrawEllipse(new Pen(Color.Orange, 3), x, y + 50, 20, 20);
+            g.DrawString("Processing", font, Brushes.Black, x + 30, y + 53);
             
             // Light Green - Visited
-            g.FillEllipse(Brushes.LightGreen, x, y + 100, 20, 20);
-            g.DrawEllipse(new Pen(Color.Green, 2), x, y + 100, 20, 20);
-            g.DrawString("Visited", font, Brushes.Black, x + 30, y + 103);
+            g.FillEllipse(Brushes.LightGreen, x, y + 75, 20, 20);
+            g.DrawEllipse(new Pen(Color.Green, 2), x, y + 75, 20, 20);
+            g.DrawString("Visited", font, Brushes.Black, x + 30, y + 78);
         }
 
         private void DrawEdges(Graphics g, TreeNode node, Pen pen)
@@ -383,6 +397,13 @@ namespace BFSVisualizer
         {
             isDFS = cmbAlgorithm.SelectedIndex == 1;
             btnStart.Text = isDFS ? "Start DFS" : "Start BFS";
+            
+            // Switch to appropriate tree
+            root = isDFS ? dfsRoot : bfsRoot;
+            
+            // Update positions for the new tree
+            UpdateNodePositions();
+            
             ResetSimulation();
         }
 
@@ -463,6 +484,126 @@ namespace BFSVisualizer
         private void BtnReset_Click(object? sender, EventArgs e)
         {
             ResetSimulation();
+        }
+
+        private void Form1_Resize(object? sender, EventArgs e)
+        {
+            UpdateNodePositions();
+            this.Invalidate();
+        }
+
+        private void UpdateNodePositions()
+        {
+            if (bfsRoot != null)
+                UpdateBFSNodePositions();
+            if (dfsRoot != null)
+                UpdateDFSNodePositions();
+        }
+
+        private void UpdateBFSNodePositions()
+        {
+            if (bfsRoot == null) return;
+
+            int centerX = this.ClientSize.Width / 2;
+            int centerY = this.ClientSize.Height / 2;
+            
+            // Scale factors based on window size
+            float scaleX = this.ClientSize.Width / 1200f;
+            float scaleY = this.ClientSize.Height / 700f;
+            
+            // Get all nodes in BFS tree
+            var allNodes = GetAllNodesFromTree(bfsRoot);
+            
+            foreach (var node in allNodes)
+            {
+                Point originalPos = GetOriginalBFSPosition(node.Value);
+                node.Position = new Point(
+                    centerX + (int)((originalPos.X - 480) * scaleX),
+                    centerY + (int)((originalPos.Y - 200) * scaleY) - 50
+                );
+            }
+        }
+
+        private void UpdateDFSNodePositions()
+        {
+            if (dfsRoot == null) return;
+
+            int centerX = this.ClientSize.Width / 2;
+            int centerY = this.ClientSize.Height / 2;
+            
+            // Scale factors based on window size
+            float scaleX = this.ClientSize.Width / 1200f;
+            float scaleY = this.ClientSize.Height / 700f;
+            
+            // Get all nodes in DFS tree
+            var allNodes = GetAllNodesFromTree(dfsRoot);
+            
+            foreach (var node in allNodes)
+            {
+                Point originalPos = GetOriginalDFSPosition(node.Value);
+                node.Position = new Point(
+                    centerX + (int)((originalPos.X - 480) * scaleX),
+                    centerY + (int)((originalPos.Y - 200) * scaleY) - 50
+                );
+            }
+        }
+
+        private List<TreeNode> GetAllNodesFromTree(TreeNode root)
+        {
+            var nodes = new List<TreeNode>();
+            var queue = new Queue<TreeNode>();
+            queue.Enqueue(root);
+            
+            while (queue.Count > 0)
+            {
+                var node = queue.Dequeue();
+                nodes.Add(node);
+                foreach (var child in node.Children)
+                {
+                    queue.Enqueue(child);
+                }
+            }
+            
+            return nodes;
+        }
+
+        private Point GetOriginalBFSPosition(int value)
+        {
+            return value switch
+            {
+                1 => new Point(480, 50),
+                2 => new Point(280, 150),
+                3 => new Point(480, 150),
+                4 => new Point(680, 150),
+                5 => new Point(230, 250),
+                6 => new Point(330, 250),
+                7 => new Point(480, 250),
+                8 => new Point(630, 250),
+                9 => new Point(730, 250),
+                10 => new Point(210, 350),
+                11 => new Point(350, 350),
+                12 => new Point(630, 350),
+                13 => new Point(710, 350),
+                14 => new Point(750, 350),
+                _ => new Point(480, 50)
+            };
+        }
+
+        private Point GetOriginalDFSPosition(int value)
+        {
+            return value switch
+            {
+                1 => new Point(480, 50),
+                2 => new Point(280, 150),
+                6 => new Point(480, 150),
+                8 => new Point(680, 150),
+                3 => new Point(230, 250),
+                4 => new Point(330, 250),
+                5 => new Point(230, 350),
+                7 => new Point(480, 250),
+                9 => new Point(680, 250),
+                _ => new Point(480, 50)
+            };
         }
     }
 }
